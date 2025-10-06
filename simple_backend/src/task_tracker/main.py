@@ -37,12 +37,22 @@ def create_task(task: TaskCreate):
 def update_task(task_id: int, task: Task):
     data = store.load()
     for i, t in enumerate(data):
-        if t["id"] == task_id:
-            if task.notes is None:
-                task.notes = t.get("notes")
-            data[i] = task.model_dump()
+        if t.get("id") == task_id:
+            title_changed = (task.title != t.get("title"))
+            new_notes = task.notes if task.notes is not None else t.get("notes")
+            if title_changed:
+                new_notes = llm.explain(task.title)
+
+            updated = {
+                "id": task_id,
+                "title": task.title,
+                "status": task.status,
+                "notes": new_notes,
+            }
+            data[i] = updated
             store.save(data)
-            return data[i]
+            return updated
+
     raise HTTPException(404, "Задача не найдена")
 
 @app.delete("/tasks/{task_id}")
