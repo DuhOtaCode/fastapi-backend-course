@@ -1,30 +1,35 @@
-import requests
 import os
+import requests
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
-
 class JsonBinStorage:
     def __init__(self):
-        self.bin_id = os.getenv("JSONBIN_ID")
-        self.api_key = os.getenv("JSONBIN_API_KEY")
-        self.url = f"https://api.jsonbin.io/v3/b/{self.bin_id}"
-
-        if not self.bin_id or not self.api_key:
-            raise ValueError("Не заданы переменные окружения JSONBIN_ID и JSONBIN_API_KEY")
-
+        self.url = f"https://api.jsonbin.io/v3/b/{os.getenv('JSONBIN_ID')}"
         self.headers = {
+            "X-Master-Key": os.getenv("JSONBIN_API_KEY"),
             "Content-Type": "application/json",
-            "X-Master-Key": self.api_key,
         }
 
     def load(self):
-        r = requests.get(f"{self.url}/latest", headers=self.headers)
+        r = requests.get(f"{self.url}/latest", headers=self.headers, timeout=10)
         r.raise_for_status()
-        return r.json()["record"]
+        record = r.json().get("record", [])
+        if isinstance(record, str):
+            try:
+                record = json.loads(record)
+            except json.JSONDecodeError:
+                record = []
+        if isinstance(record, dict) and "record" in record:
+            record = record["record"]
+        return [t for t in record if isinstance(t, dict)]
 
     def save(self, data):
-        r = requests.put(self.url, json=data, headers=self.headers)
+        if not isinstance(data, list):
+            raise TypeError("save() принимает только список задач")
+        payload = {"record": data}
+        r = requests.put(self.url, json=payload, headers=self.headers, timeout=10)
         r.raise_for_status()
         return r.json()
